@@ -14,7 +14,7 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use world::{Cell, World};
 
-const WIDTH: u32 = 256;
+const WIDTH: u32 = 512;
 const HEIGHT: u32 = 256;
 
 fn main() -> Result<(), Error> {
@@ -97,18 +97,20 @@ fn main() -> Result<(), Error> {
                 return;
             }
             if input.mouse_held(0) {
-                let coords = pixels.window_pos_to_pixel(input.mouse().unwrap());
-                if let Ok(coords) = coords {
-                    let paint_with = framework.gui.painting_with;
+                if let Some(mouse) = input.mouse() {
+                    let coords = pixels.window_pos_to_pixel(mouse);
+                    if let Ok(coords) = coords {
+                        let paint_with = framework.gui.painting_with;
 
-                    world.set(
-                        coords.0 as isize,
-                        coords.1 as isize,
-                        Cell {
-                            owner: paint_with,
-                            troops: framework.gui.painting_troops,
-                        },
-                    );
+                        world.set(
+                            coords.0 as isize,
+                            coords.1 as isize,
+                            Cell {
+                                owner: paint_with,
+                                troops: framework.gui.painting_troops,
+                            },
+                        );
+                    }
                 }
             }
             // Update the scale factor

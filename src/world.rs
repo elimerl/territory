@@ -1,5 +1,8 @@
 use itertools::Itertools;
-use rand::{seq::IteratorRandom, Rng};
+use rand::{
+    seq::{IteratorRandom, SliceRandom},
+    Rng,
+};
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 pub struct World {
@@ -37,18 +40,13 @@ impl World {
     }
 
     pub fn update(&mut self) {
-        self.cells = self
-            .cells
-            .par_iter()
-            .copied()
-            .enumerate()
-            .map(|(i, cell)| {
-                let mut cell = cell;
+        let mut buf = self.cells.clone();
 
-                let x = (i % self.width) as isize;
-                let y = (i / self.width) as isize;
+        for x in 0isize..self.width as isize {
+            for y in 0isize..self.height as isize {
+                let mut cell = *self.get(x, y).unwrap();
 
-                let neighbors = [
+                let mut neighbors = [
                     self.get(x - 1, y),
                     self.get(x + 1, y),
                     self.get(x, y - 1),
@@ -57,84 +55,138 @@ impl World {
                     self.get(x + 1, y - 1),
                     self.get(x - 1, y + 1),
                     self.get(x + 1, y + 1),
-                ]
-                .into_iter()
-                .flatten();
-
+                ];
+                neighbors.shuffle(&mut rand::thread_rng());
                 let num_of_friendlies = if cell.owner == 0 {
                     0
                 } else {
-                    neighbors.clone().filter(|v| v.owner == cell.owner).count()
+                    neighbors
+                        .iter()
+                        .flatten()
+                        .filter(|v| v.owner == cell.owner)
+                        .count()
                 };
 
-                // grow
-                let should_grow = (self.tick + i) % 2 == 0;
-                if should_grow {
-                    cell.troops = (cell.troops as f32 * (0.1 * num_of_friendlies as f32)) as u8;
-                }
-
-                for enemy in self
-                    .empires
-                    .iter()
-                    .map(|empire| {
-                        (
-                            empire.id,
-                            neighbors
-                                .clone()
-                                .filter(|v| v.owner == empire.id)
-                                .choose(&mut rand::thread_rng()),
-                            neighbors.clone().filter(|v| v.owner == empire.id).count(),
-                        )
-                    })
-                    .filter_map(|v| {
-                        if v.1.is_some() {
-                            Some((v.0, v.1.unwrap(), v.2))
-                        } else {
-                            None
-                        }
-                    })
-                    .sorted_by_key(|v| v.2)
-                    .rev()
+                if (self.tick + x as usize * self.height + y as usize)
+                    % rand::thread_rng().gen_range(5..8)
+                    == 0
                 {
-                    if enemy.0 == cell.owner && enemy.1.troops > cell.troops {
-                        cell.troops = ((enemy.1.troops as f32)
-                            * rand::thread_rng().gen_range(0.98..1.))
-                            as u8;
-                        break;
-                    }
-                    if enemy.1.troops > cell.troops {
-                        cell.owner = enemy.0;
-                        cell.troops = ((enemy.1.troops as f32)
-                            * rand::thread_rng().gen_range(0.97..1.03))
-                            as u8;
-                        break;
-                    }
-                }
-                if (cell.troops < (self.max_troops as f32 * 1.0 / 16.0) as u8)
-                    && rand::thread_rng().gen_bool(0.1)
-                {
-                    cell.owner = rand::thread_rng().gen_range(0..=self.empires.len()) as u16;
                     cell.troops = (cell.troops as f32
-                        + rand::thread_rng().gen_range(1.0..self.max_troops as f32))
+                        * (num_of_friendlies as f32 * rand::thread_rng().gen_range(0.01..0.1)))
                         as u8;
                 }
+
+                for neighbor in neighbors.iter().flatten() {
+                    if neighbor.owner == 0 {
+                        continue;
+                    }
+                    if (num_of_friendlies < 3)
+                        || neighbor.troops > cell.troops
+                        || rand::thread_rng().gen_bool(0.25)
+                    {
+                        cell.troops = (neighbor.troops as f32
+                            * rand::thread_rng().gen_range(0.98..1.01))
+                            as u8;
+                        cell.owner = neighbor.owner;
+                        break;
+                    }
+                }
+
                 if cell.troops == 0 {
                     cell.owner = 0;
                 }
-                cell.troops = cell.troops.clamp(0, self.max_troops);
 
-                cell
-            })
-            .collect();
+                buf[(y as usize) * self.width + (x as usize)] = cell;
+            }
+        }
+
+        self.cells = buf;
+
+        // self.cells = self
+        //     .cells
+        //     .par_iter()
+        //     .copied()
+        //     .enumerate()
+        //     .map(|(i, cell)| {
+        //         let mut cell = cell;
+
+        //         let x = (i % self.width) as isize;
+        //         let y = (i / self.width) as isize;
+
+        //         let mut neighbors = [
+        //             self.get(x - 1, y),
+        //             self.get(x + 1, y),
+        //             self.get(x, y - 1),
+        //             self.get(x, y + 1),
+        //             self.get(x - 1, y - 1),
+        //             self.get(x + 1, y - 1),
+        //             self.get(x - 1, y + 1),
+        //             self.get(x + 1, y + 1),
+        //         ]
+        //         .into_iter()
+        //         .flatten()
+        //         .collect::<Vec<_>>();
+        //         neighbors.shuffle(&mut rand::thread_rng());
+
+        //         let num_of_friendlies = if cell.owner == 0 {
+        //             0
+        //         } else {
+        //             neighbors.iter().filter(|v| v.owner == cell.owner).count()
+        //         };
+
+        //         // cell.troops = (cell.troops as f32 * rand::thread_rng().gen_range(0.99..1.02)) as u8;
+
+        //         // Decay
+        //         if (self.tick + i) % rand::thread_rng().gen_range(3..5) == 0 {
+        //             cell.troops = (cell.troops as f32
+        //                 * (rand::thread_rng().gen_range(0.05..0.13) * num_of_friendlies as f32))
+        //                 as u8;
+        //         }
+
+        //         // Takeover
+        //         for neighbor in neighbors {
+        //             if neighbor.owner == 0 {
+        //                 continue;
+        //             }
+        //             if num_of_friendlies < 2
+        //                 || neighbor.troops > cell.troops && (rand::random::<u8>() < neighbor.troops)
+        //             {
+        //                 cell.owner = neighbor.owner;
+        //                 cell.troops = (neighbor.troops as f32
+        //                     * rand::thread_rng().gen_range(0.9..1.01))
+        //                     as u8;
+        //                 break;
+        //             }
+        //             // if neighbor.troops.abs_diff(cell.troops) < 32 {
+        //             //     cell.troops =
+        //             //         (cell.troops as f32 * rand::thread_rng().gen_range(0.9..1.1f32)) as u8;
+        //             // }
+        //             // if neighbor.owner != cell.owner && neighbor.troops == cell.troops {
+        //             //     cell.troops =
+        //             //         (cell.troops as f32 * rand::thread_rng().gen_range(0.1..1.1f32)) as u8;
+        //             // }
+        //         }
+
+        //         if cell.troops == 0 {
+        //             cell.owner = 0;
+        //         }
+        //         cell.troops = cell.troops.clamp(0, self.max_troops);
+
+        //         cell
+        //     })
+        //     .collect();
         self.tick += 1;
     }
 
     pub fn get(&self, x: isize, y: isize) -> Option<&Cell> {
-        if x < (self.width as isize) && y < (self.height as isize) && x >= 0 && y >= 0 {
-            Some(&self.cells[(y as usize) * self.width + (x as usize)])
-        } else {
-            None
-        }
+        // if x < 0 || x >= self.width as isize || y < 0 || y >= self.height as isize {
+        //     None
+        // } else {
+        Some(
+            &self.cells[(y.rem_euclid(self.height as isize) as usize) * self.width
+                + (x.rem_euclid(self.width as isize) as usize)],
+        )
+        // }
     }
     pub fn set(&mut self, x: isize, y: isize, val: Cell) {
         assert!(x >= 0 && x < (self.width as isize));

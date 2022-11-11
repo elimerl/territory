@@ -164,7 +164,7 @@ impl Gui {
                 {
                     world.cells = vec![Cell::default(); world.width * world.height];
                     for empire in world.empires.clone() {
-                        for _ in 0..10 {
+                        for _ in 0..4 {
                             world.set(
                                 rand::thread_rng().gen_range(0..world.width) as isize,
                                 rand::thread_rng().gen_range(0..world.height) as isize,
@@ -175,6 +175,22 @@ impl Gui {
                             );
                         }
                     }
+                    // world.set(
+                    //     0,
+                    //     0,
+                    //     Cell {
+                    //         owner: 1,
+                    //         troops: 255,
+                    //     },
+                    // );
+                    // world.set(
+                    //     (world.width as isize) - 1,
+                    //     (world.height as isize) - 1,
+                    //     Cell {
+                    //         owner: 2,
+                    //         troops: 255,
+                    //     },
+                    // );
                 }
                 if self.playing {
                     if ui.button("pause").clicked() {
@@ -214,7 +230,7 @@ impl Gui {
                         .text("Max troops/cell"),
                 );
                 egui::ScrollArea::vertical()
-                    .max_height(100.0)
+                    .max_height(300.0)
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
                         for empire in &mut world.empires {
