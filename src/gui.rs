@@ -1,5 +1,6 @@
 use egui::{ClippedPrimitive, Context, TexturesDelta};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
+use itertools::Itertools;
 use pixels::{wgpu, PixelsContext};
 use rand::Rng;
 use winit::event_loop::EventLoopWindowTarget;
@@ -127,8 +128,9 @@ impl Framework {
 pub struct Gui {
     /// Only show the egui window when true.
     window_open: bool,
+    world_settings_open: bool,
     pub painting_with: u16,
-    pub painting_troops: u8,
+    pub painting_troops: u16,
     pub playing: bool,
 }
 impl Gui {
@@ -136,6 +138,7 @@ impl Gui {
     fn new() -> Self {
         Self {
             window_open: true,
+            world_settings_open: true,
             painting_with: 0,
             painting_troops: 1,
             playing: true,
@@ -144,135 +147,137 @@ impl Gui {
 
     /// Create the UI using egui.
     fn ui(&mut self, ctx: &Context, world: &mut World) {
-        egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("About...").clicked() {
-                        self.window_open = true;
-                        ui.close_menu();
-                    }
-                })
-            });
+        egui::Window::new("World Settings").show(ctx, |ui| {
+            ui.label("Settings to play with about the simulation.")
         });
 
-        egui::Window::new("window")
-            .open(&mut self.window_open)
-            .show(ctx, |ui| {
-                if ui
-                    .button("reset to 1 per empire (start with 255 troops)")
-                    .clicked()
-                {
-                    world.cells = vec![Cell::default(); world.width * world.height];
-                    for empire in world.empires.clone() {
-                        for _ in 0..4 {
-                            world.set(
-                                rand::thread_rng().gen_range(0..world.width) as isize,
-                                rand::thread_rng().gen_range(0..world.height) as isize,
-                                Cell {
-                                    owner: empire.id,
-                                    troops: 255,
-                                },
-                            );
-                        }
-                    }
-                    // world.set(
-                    //     0,
-                    //     0,
-                    //     Cell {
-                    //         owner: 1,
-                    //         troops: 255,
-                    //     },
-                    // );
-                    // world.set(
-                    //     (world.width as isize) - 1,
-                    //     (world.height as isize) - 1,
-                    //     Cell {
-                    //         owner: 2,
-                    //         troops: 255,
-                    //     },
-                    // );
-                }
-                if self.playing {
-                    if ui.button("pause").clicked() {
-                        self.playing = false;
-                    }
-                } else if ui.button("play").clicked() {
-                    self.playing = true;
-                }
-                ui.label(format!("Painting with empire {}", self.painting_with));
-                egui::ComboBox::from_label("Painting with empire")
-                    .selected_text(format!("{:?}", self.painting_with))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.painting_with, 0, "blank");
-                        for empire in &world.empires {
-                            ui.selectable_value(
-                                &mut self.painting_with,
-                                empire.id,
-                                format!("{}", empire.id),
-                            );
-                        }
-                    });
-
-                if self.painting_with != 0 {
-                    ui.add(
-                        egui::Slider::new(&mut self.painting_troops, 1..=255)
-                            .clamp_to_range(true)
-                            .text("Troops to paint"),
+        egui::Window::new("World Info").show(ctx, |ui| {
+            if ui.button("Randomize").clicked() {
+                world.cells = vec![Cell::default(); world.width * world.height];
+                for empire in world.empires.clone() {
+                    // for _ in 0..4 {
+                    world.set(
+                        rand::thread_rng().gen_range(0..world.width) as isize,
+                        rand::thread_rng().gen_range(0..world.height) as isize,
+                        Cell {
+                            owner: empire.id,
+                            troops: rand::random(),
+                        },
                     );
-                } else {
-                    self.painting_troops = 0;
+                    // }
                 }
+                // world.set(
+                //     0,
+                //     0,
+                //     Cell {
+                //         owner: 1,
+                //         troops: 255,
+                //     },
+                // );
+                // world.set(
+                //     (world.width as isize) - 1,
+                //     (world.height as isize) - 1,
+                //     Cell {
+                //         owner: 2,
+                //         troops: 255,
+                //     },
+                // );
+            }
+            if self.playing {
+                if ui.button("Pause").clicked() {
+                    self.playing = false;
+                }
+            } else if ui.button("Play").clicked() {
+                self.playing = true;
+            }
+            ui.label(format!("Painting with empire {}", self.painting_with));
+            egui::ComboBox::from_label("Painting with empire")
+                .selected_text(format!("{:?}", self.painting_with))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.painting_with, 0, "blank");
+                    for empire in &world.empires {
+                        ui.selectable_value(
+                            &mut self.painting_with,
+                            empire.id,
+                            format!("{}", empire.id),
+                        );
+                    }
+                });
 
-                ui.heading("World Settings");
+            if self.painting_with != 0 {
                 ui.add(
-                    egui::Slider::new(&mut world.max_troops, 1..=255)
+                    egui::Slider::new(&mut self.painting_troops, 1..=u16::MAX)
                         .clamp_to_range(true)
-                        .text("Max troops/cell"),
+                        .text("Troops to paint"),
                 );
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        for empire in &mut world.empires {
-                            ui.heading(format!("Empire {}", empire.id));
-                            let mut color = [
-                                empire.color.0 as f32 / 255.,
-                                empire.color.1 as f32 / 255.,
-                                empire.color.2 as f32 / 255.,
-                                empire.color.3 as f32 / 255.,
-                            ];
-                            ui.color_edit_button_rgba_premultiplied(&mut color);
-                            empire.color = (
-                                (color[0] * 255.) as u8,
-                                (color[1] * 255.) as u8,
-                                (color[2] * 255.) as u8,
-                                (color[3] * 255.) as u8,
-                            );
-                            ui.label(format!(
-                                "{} cells",
-                                world.cells.iter().filter(|v| v.owner == empire.id).count()
-                            ));
-                            ui.label(format!(
-                                "{} troops",
+            } else {
+                self.painting_troops = 0;
+            }
+
+            egui::ScrollArea::vertical()
+                .max_height(300.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    let mut colors = vec![(0, 0, 0, 0); world.empires.len()];
+                    for (i, (empire, cells, troops)) in world
+                        .empires
+                        .iter()
+                        .map(|empire| {
+                            let e = &empire;
+                            (
+                                empire,
+                                world.cells.iter().filter(|v| v.owner == e.id).count(),
                                 world
                                     .cells
                                     .iter()
-                                    .filter_map(|v| if v.owner == empire.id {
-                                        Some(v.troops as usize)
-                                    } else {
-                                        None
+                                    .filter_map(|v| {
+                                        if v.owner == e.id {
+                                            Some(v.troops as usize)
+                                        } else {
+                                            None
+                                        }
                                     })
-                                    .sum::<usize>()
-                            ));
-                        }
-                    });
+                                    .sum::<usize>(),
+                            )
+                        })
+                        .sorted_by_key(|v| v.2)
+                        .rev()
+                        .enumerate()
+                    {
+                        ui.heading(format!("Empire {}", empire.id));
+                        ui.label(format!("This empire is #{} in troops", i + 1));
+                        let mut color = [
+                            empire.color.0 as f32 / 255.,
+                            empire.color.1 as f32 / 255.,
+                            empire.color.2 as f32 / 255.,
+                            empire.color.3 as f32 / 255.,
+                        ];
+                        ui.color_edit_button_rgba_premultiplied(&mut color);
 
-                if ui.button("create new empire").clicked() {
-                    world.empires.push(Empire {
-                        id: (world.empires.len() + 1) as u16,
-                        color: (rand::random(), rand::random(), rand::random(), 255),
-                    });
-                }
-            });
+                        colors[(empire.id - 1) as usize] = (
+                            (color[0] * 255.) as u8,
+                            (color[1] * 255.) as u8,
+                            (color[2] * 255.) as u8,
+                            (color[3] * 255.) as u8,
+                        );
+                        ui.label(format!("{} cells", cells));
+                        ui.label(if troops > 1_000_000_000 {
+                            format!("{} billion troops", troops / 1_000_000_000)
+                        } else {
+                            format!("{} million troops", troops / 1_000_000)
+                        });
+                    }
+                    for (i, color) in colors.iter().enumerate() {
+                        world.empires[i].color = *color;
+                    }
+                });
+
+            if ui.button("create new empire").clicked() {
+                world.empires.push(Empire {
+                    id: (world.empires.len() + 1) as u16,
+                    color: (rand::random(), rand::random(), rand::random(), 255),
+                });
+            }
+        });
     }
 }

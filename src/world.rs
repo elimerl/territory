@@ -11,31 +11,16 @@ pub struct World {
     pub height: usize,
     pub empires: Vec<Empire>,
     pub tick: usize,
-    pub max_troops: u8,
 }
 impl World {
     /// Create a new `World` instance that can draw a moving box.
     pub fn new(width: usize, height: usize) -> Self {
         Self {
             cells: vec![Cell::default(); width * height],
-            empires: vec![
-                Empire {
-                    id: 1,
-                    color: (255, 0, 0, 255),
-                },
-                Empire {
-                    id: 2,
-                    color: (0, 255, 0, 255),
-                },
-                Empire {
-                    id: 3,
-                    color: (0, 0, 255, 255),
-                },
-            ],
+            empires: vec![],
             width,
             height,
             tick: 0,
-            max_troops: 255,
         }
     }
 
@@ -57,43 +42,28 @@ impl World {
                     self.get(x + 1, y + 1),
                 ];
                 neighbors.shuffle(&mut rand::thread_rng());
-                let num_of_friendlies = if cell.owner == 0 {
-                    0
-                } else {
-                    neighbors
-                        .iter()
-                        .flatten()
-                        .filter(|v| v.owner == cell.owner)
-                        .count()
-                };
 
-                if (self.tick + x as usize * self.height + y as usize)
-                    % rand::thread_rng().gen_range(5..8)
-                    == 0
-                {
-                    cell.troops = (cell.troops as f32
-                        * (num_of_friendlies as f32 * rand::thread_rng().gen_range(0.01..0.1)))
-                        as u8;
-                }
+                cell.troops = (cell.troops as f32 * 0.95) as u16;
 
                 for neighbor in neighbors.iter().flatten() {
-                    if neighbor.owner == 0 {
-                        continue;
-                    }
-                    if (num_of_friendlies < 3)
-                        || neighbor.troops > cell.troops
-                        || rand::thread_rng().gen_bool(0.25)
-                    {
+                    if neighbor.owner == cell.owner && neighbor.troops > cell.troops {
+                        cell.owner = neighbor.owner;
                         cell.troops = (neighbor.troops as f32
                             * rand::thread_rng().gen_range(0.98..1.01))
-                            as u8;
+                            as u16;
+                        break;
+                    }
+                    if neighbor.troops > cell.troops {
                         cell.owner = neighbor.owner;
+                        cell.troops = (neighbor.troops as f32
+                            * rand::thread_rng().gen_range(0.98..1.01))
+                            as u16;
                         break;
                     }
                 }
 
-                if cell.troops == 0 {
-                    cell.owner = 0;
+                if cell.owner == 0 {
+                    cell.troops = 0;
                 }
 
                 buf[(y as usize) * self.width + (x as usize)] = cell;
@@ -208,12 +178,9 @@ impl World {
             let rgba = if cell.owner != 0 {
                 let color = self.empires[(cell.owner - 1) as usize].color;
                 [
-                    (color.0 as f32 * (cell.troops as f32 / self.max_troops as f32).clamp(0.1, 1.))
-                        as u8,
-                    (color.1 as f32 * (cell.troops as f32 / self.max_troops as f32).clamp(0.1, 1.))
-                        as u8,
-                    (color.2 as f32 * (cell.troops as f32 / self.max_troops as f32).clamp(0.1, 1.))
-                        as u8,
+                    (color.0 as f32 * (cell.troops as f32 / 65355.0)) as u8,
+                    (color.1 as f32 * (cell.troops as f32 / 65355.0)) as u8,
+                    (color.2 as f32 * (cell.troops as f32 / 65355.0)) as u8,
                     color.3,
                 ]
             } else {
@@ -228,7 +195,7 @@ impl World {
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Cell {
     pub owner: u16, // 0 = unclaimed
-    pub troops: u8, // 0 is only valid if unclaimed
+    pub troops: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
