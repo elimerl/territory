@@ -4,12 +4,9 @@ mod world;
 use std::time::Instant;
 
 use gui::Framework;
-use itertools::Itertools;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
-use rand::seq::IteratorRandom;
-use rand::Rng;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};

@@ -18,3 +18,6 @@ egui-winit = { version = "0.19", default-features = false, features = [
 	"links",
 ] }
 rayon = "1.5.3"
+
+[profile.release]
+incremental = true

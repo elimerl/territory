@@ -8,8 +8,8 @@ pub struct World {
     pub height: usize,
     pub empires: Vec<Empire>,
     pub tick: usize,
+    pub max_troops: u8,
 }
-
 impl World {
     /// Create a new `World` instance that can draw a moving box.
     pub fn new(width: usize, height: usize) -> Self {
@@ -32,6 +32,7 @@ impl World {
             width,
             height,
             tick: 0,
+            max_troops: 255,
         }
     }
 
@@ -63,15 +64,13 @@ impl World {
                 let num_of_friendlies = if cell.owner == 0 {
                     0
                 } else {
-                    neighbors.clone().filter(|v| v.owner == cell.owner).count() + 2
+                    neighbors.clone().filter(|v| v.owner == cell.owner).count()
                 };
 
-                let decay = (self.tick + i) % rand::thread_rng().gen_range(2..4) == 0;
-                if decay {
-                    cell.troops = (((cell.troops as f32)
-                        * (((num_of_friendlies as isize) as f32) * 0.075))
-                        as u8)
-                        .clamp(1, 255);
+                // grow
+                let should_grow = (self.tick + i) % 2 == 0;
+                if should_grow {
+                    cell.troops = (cell.troops as f32 * (0.1 * num_of_friendlies as f32)) as u8;
                 }
 
                 for enemy in self
@@ -97,47 +96,32 @@ impl World {
                     .sorted_by_key(|v| v.2)
                     .rev()
                 {
-                    if (num_of_friendlies < 2 || enemy.1.troops > (cell.troops)) && enemy.2 >= 1 {
-                        cell.owner = enemy.0;
+                    if enemy.0 == cell.owner && enemy.1.troops > cell.troops {
                         cell.troops = ((enemy.1.troops as f32)
-                            * rand::thread_rng().gen_range(0.97..1.02))
+                            * rand::thread_rng().gen_range(0.98..1.))
                             as u8;
                         break;
                     }
-                    // if cell.owner == 0 {
-                    //     cell.owner = enemy.0;
-                    //     cell.troops = 1;
-                    //     break;
-                    // }
-                    // if enemy.1 == cell.troops as u16 {
-                    //     cell.troops =
-                    //         (cell.troops as i32 + rand::thread_rng().gen_range(-10i32..10)) as u8;
-                    //     break;
-                    // }
+                    if enemy.1.troops > cell.troops {
+                        cell.owner = enemy.0;
+                        cell.troops = ((enemy.1.troops as f32)
+                            * rand::thread_rng().gen_range(0.97..1.03))
+                            as u8;
+                        break;
+                    }
+                }
+                if (cell.troops < (self.max_troops as f32 * 1.0 / 16.0) as u8)
+                    && rand::thread_rng().gen_bool(0.1)
+                {
+                    cell.owner = rand::thread_rng().gen_range(0..=self.empires.len()) as u16;
+                    cell.troops = (cell.troops as f32
+                        + rand::thread_rng().gen_range(1.0..self.max_troops as f32))
+                        as u8;
                 }
                 if cell.troops == 0 {
                     cell.owner = 0;
                 }
-
-                // for enemy in neighbors
-                //     .iter()
-                //     .filter(|v| v.owner != c.owner && v.owner != 0)
-                // {
-                //     if enemy.troops > cell.troops {
-                //         cell.owner = enemy.owner;
-                //         cell.troops = enemy.troops;
-                //         // cell.troops = ((((enemy.troops as f32) * 0.75).ceil()
-                //         //     + rand::thread_rng().gen_range(-10f32..10.))
-                //         //     as u16)
-                //         //     .clamp(1, u16::MAX);
-                //         break;
-                //     }
-                //     if enemy.troops == cell.troops {
-                //         cell.troops =
-                //             (cell.troops as i32 + rand::thread_rng().gen_range(-10i32..10)) as u16;
-                //         break;
-                //     }
-                // }
+                cell.troops = cell.troops.clamp(0, self.max_troops);
 
                 cell
             })
@@ -172,9 +156,12 @@ impl World {
             let rgba = if cell.owner != 0 {
                 let color = self.empires[(cell.owner - 1) as usize].color;
                 [
-                    (color.0 as f32 * (cell.troops as f32 / 255.0).clamp(0.1, 1.)) as u8,
-                    (color.1 as f32 * (cell.troops as f32 / 255.0).clamp(0.1, 1.)) as u8,
-                    (color.2 as f32 * (cell.troops as f32 / 255.0).clamp(0.1, 1.)) as u8,
+                    (color.0 as f32 * (cell.troops as f32 / self.max_troops as f32).clamp(0.1, 1.))
+                        as u8,
+                    (color.1 as f32 * (cell.troops as f32 / self.max_troops as f32).clamp(0.1, 1.))
+                        as u8,
+                    (color.2 as f32 * (cell.troops as f32 / self.max_troops as f32).clamp(0.1, 1.))
+                        as u8,
                     color.3,
                 ]
             } else {

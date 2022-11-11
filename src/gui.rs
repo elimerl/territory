@@ -164,14 +164,16 @@ impl Gui {
                 {
                     world.cells = vec![Cell::default(); world.width * world.height];
                     for empire in world.empires.clone() {
-                        world.set(
-                            rand::thread_rng().gen_range(0..world.width) as isize,
-                            rand::thread_rng().gen_range(0..world.height) as isize,
-                            Cell {
-                                owner: empire.id,
-                                troops: 255,
-                            },
-                        );
+                        for _ in 0..10 {
+                            world.set(
+                                rand::thread_rng().gen_range(0..world.width) as isize,
+                                rand::thread_rng().gen_range(0..world.height) as isize,
+                                Cell {
+                                    owner: empire.id,
+                                    troops: 255,
+                                },
+                            );
+                        }
                     }
                 }
                 if self.playing {
@@ -204,40 +206,50 @@ impl Gui {
                 } else {
                     self.painting_troops = 0;
                 }
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for empire in &mut world.empires {
-                        ui.heading(format!("Empire {}", empire.id));
-                        let mut color = [
-                            empire.color.0 as f32 / 255.,
-                            empire.color.1 as f32 / 255.,
-                            empire.color.2 as f32 / 255.,
-                            empire.color.3 as f32 / 255.,
-                        ];
-                        ui.color_edit_button_rgba_premultiplied(&mut color);
-                        empire.color = (
-                            (color[0] * 255.) as u8,
-                            (color[1] * 255.) as u8,
-                            (color[2] * 255.) as u8,
-                            (color[3] * 255.) as u8,
-                        );
-                        ui.label(format!(
-                            "{} cells",
-                            world.cells.iter().filter(|v| v.owner == empire.id).count()
-                        ));
-                        ui.label(format!(
-                            "{} troops",
-                            world
-                                .cells
-                                .iter()
-                                .filter_map(|v| if v.owner == empire.id {
-                                    Some(v.troops as usize)
-                                } else {
-                                    None
-                                })
-                                .sum::<usize>()
-                        ));
-                    }
-                });
+
+                ui.heading("World Settings");
+                ui.add(
+                    egui::Slider::new(&mut world.max_troops, 1..=255)
+                        .clamp_to_range(true)
+                        .text("Max troops/cell"),
+                );
+                egui::ScrollArea::vertical()
+                    .max_height(100.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        for empire in &mut world.empires {
+                            ui.heading(format!("Empire {}", empire.id));
+                            let mut color = [
+                                empire.color.0 as f32 / 255.,
+                                empire.color.1 as f32 / 255.,
+                                empire.color.2 as f32 / 255.,
+                                empire.color.3 as f32 / 255.,
+                            ];
+                            ui.color_edit_button_rgba_premultiplied(&mut color);
+                            empire.color = (
+                                (color[0] * 255.) as u8,
+                                (color[1] * 255.) as u8,
+                                (color[2] * 255.) as u8,
+                                (color[3] * 255.) as u8,
+                            );
+                            ui.label(format!(
+                                "{} cells",
+                                world.cells.iter().filter(|v| v.owner == empire.id).count()
+                            ));
+                            ui.label(format!(
+                                "{} troops",
+                                world
+                                    .cells
+                                    .iter()
+                                    .filter_map(|v| if v.owner == empire.id {
+                                        Some(v.troops as usize)
+                                    } else {
+                                        None
+                                    })
+                                    .sum::<usize>()
+                            ));
+                        }
+                    });
 
                 if ui.button("create new empire").clicked() {
                     world.empires.push(Empire {
