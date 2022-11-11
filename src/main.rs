@@ -14,7 +14,7 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 use world::{Cell, World};
 
-const WIDTH: u32 = 256;
+const WIDTH: u32 = 512;
 const HEIGHT: u32 = 256;
 
 fn main() -> Result<(), Error> {

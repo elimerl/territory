@@ -148,14 +148,20 @@ impl Gui {
     /// Create the UI using egui.
     fn ui(&mut self, ctx: &Context, world: &mut World) {
         egui::Window::new("World Settings").show(ctx, |ui| {
-            ui.label("Settings to play with about the simulation.")
+            ui.label("Settings to play with about the simulation.");
+
+            if ui.button("Add empire").clicked() {
+                world.empires.push(Empire {
+                    id: (world.empires.len() + 1) as u16,
+                    color: (rand::random(), rand::random(), rand::random(), 255),
+                });
+            }
         });
 
         egui::Window::new("World Info").show(ctx, |ui| {
             if ui.button("Randomize").clicked() {
                 world.cells = vec![Cell::default(); world.width * world.height];
                 for empire in world.empires.clone() {
-                    // for _ in 0..4 {
                     world.set(
                         rand::thread_rng().gen_range(0..world.width) as isize,
                         rand::thread_rng().gen_range(0..world.height) as isize,
@@ -164,24 +170,7 @@ impl Gui {
                             troops: rand::random(),
                         },
                     );
-                    // }
                 }
-                // world.set(
-                //     0,
-                //     0,
-                //     Cell {
-                //         owner: 1,
-                //         troops: 255,
-                //     },
-                // );
-                // world.set(
-                //     (world.width as isize) - 1,
-                //     (world.height as isize) - 1,
-                //     Cell {
-                //         owner: 2,
-                //         troops: 255,
-                //     },
-                // );
             }
             if self.playing {
                 if ui.button("Pause").clicked() {
@@ -190,36 +179,13 @@ impl Gui {
             } else if ui.button("Play").clicked() {
                 self.playing = true;
             }
-            ui.label(format!("Painting with empire {}", self.painting_with));
-            egui::ComboBox::from_label("Painting with empire")
-                .selected_text(format!("{:?}", self.painting_with))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.painting_with, 0, "blank");
-                    for empire in &world.empires {
-                        ui.selectable_value(
-                            &mut self.painting_with,
-                            empire.id,
-                            format!("{}", empire.id),
-                        );
-                    }
-                });
-
-            if self.painting_with != 0 {
-                ui.add(
-                    egui::Slider::new(&mut self.painting_troops, 1..=u16::MAX)
-                        .clamp_to_range(true)
-                        .text("Troops to paint"),
-                );
-            } else {
-                self.painting_troops = 0;
-            }
 
             egui::ScrollArea::vertical()
                 .max_height(300.0)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     let mut colors = vec![(0, 0, 0, 0); world.empires.len()];
-                    for (i, (empire, cells, troops)) in world
+                    let empires_sorted = world
                         .empires
                         .iter()
                         .map(|empire| {
@@ -242,9 +208,31 @@ impl Gui {
                         })
                         .sorted_by_key(|v| v.2)
                         .rev()
-                        .enumerate()
-                    {
+                        .collect::<Vec<_>>();
+                    for (i, (empire, cells, troops)) in empires_sorted.iter().enumerate() {
                         ui.heading(format!("Empire {}", empire.id));
+
+                        ui.label(format!(
+                            "{}",
+                            world
+                                .empires
+                                .iter()
+                                .filter(|v| {
+                                    v.id != empire.id && empires_sorted[v.id as usize - 1].1 == 0
+                                })
+                                .count()
+                        ));
+                        if world
+                            .empires
+                            .iter()
+                            .filter(|v| {
+                                v.id == empire.id && empires_sorted[v.id as usize - 1].1 == 0
+                            })
+                            .count()
+                            == world.empires.len() - 1
+                        {
+                            ui.label("Winner winner chicken dinner");
+                        }
                         ui.label(format!("This empire is #{} in troops", i + 1));
                         let mut color = [
                             empire.color.0 as f32 / 255.,
@@ -261,23 +249,18 @@ impl Gui {
                             (color[3] * 255.) as u8,
                         );
                         ui.label(format!("{} cells", cells));
-                        ui.label(if troops > 1_000_000_000 {
+                        ui.label(if *troops > 1_000_000_000 {
                             format!("{} billion troops", troops / 1_000_000_000)
-                        } else {
+                        } else if *troops > 1_000_000 {
                             format!("{} million troops", troops / 1_000_000)
+                        } else {
+                            format!("{} troops", troops)
                         });
                     }
                     for (i, color) in colors.iter().enumerate() {
                         world.empires[i].color = *color;
                     }
                 });
-
-            if ui.button("create new empire").clicked() {
-                world.empires.push(Empire {
-                    id: (world.empires.len() + 1) as u16,
-                    color: (rand::random(), rand::random(), rand::random(), 255),
-                });
-            }
         });
     }
 }
