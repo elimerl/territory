@@ -1,12 +1,12 @@
 use egui::{ClippedPrimitive, Context, TexturesDelta};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 use itertools::Itertools;
-use pixels::{wgpu, PixelsContext};
+use pixels::{wgpu, Pixels, PixelsContext};
 use rand::Rng;
 use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
 
-use territory::world::{Cell, Empire, World};
+use libterritory::world::{Cell, Empire, World};
 
 /// Manages all state required for rendering egui over `Pixels`.
 pub(crate) struct Framework {
@@ -74,12 +74,12 @@ impl Framework {
     }
 
     /// Prepare egui.
-    pub(crate) fn prepare(&mut self, window: &Window, world: &mut World) {
+    pub(crate) fn prepare(&mut self, window: &Window, world: &mut World, pixels: &mut Pixels) {
         // Run the egui frame and create all paint jobs to prepare for rendering.
         let raw_input = self.egui_state.take_egui_input(window);
         let output = self.egui_ctx.run(raw_input, |egui_ctx| {
             // Draw the demo application.
-            self.gui.ui(egui_ctx, world);
+            self.gui.ui(egui_ctx, world, pixels);
         });
 
         self.textures.append(output.textures_delta);
@@ -127,15 +127,21 @@ impl Framework {
 /// Example application state. A real application will need a lot more state than this.
 pub struct Gui {
     pub playing: bool,
+    new_width: u32,
+    new_height: u32,
 }
 impl Gui {
     /// Create a `Gui`.
     fn new() -> Self {
-        Self { playing: true }
+        Self {
+            playing: true,
+            new_width: 256,
+            new_height: 256,
+        }
     }
 
     /// Create the UI using egui.
-    fn ui(&mut self, ctx: &Context, world: &mut World) {
+    fn ui(&mut self, ctx: &Context, world: &mut World, pixels: &mut Pixels) {
         egui::Window::new("About").show(ctx, |ui| {
             ui.heading("Usage");
 			ui.label("To get started, press 'Add empire' in the world settings window a few times, then hit 'Randomize' and watch!");
@@ -143,6 +149,14 @@ impl Gui {
 
         egui::Window::new("World Settings").show(ctx, |ui| {
             ui.label("Settings to play with about the simulation.");
+
+            ui.add(egui::Slider::new(&mut self.new_width, 0..=1024).text("width"));
+            ui.add(egui::Slider::new(&mut self.new_height, 0..=1024).text("height"));
+
+            if ui.button("Resize").clicked() {
+                world.resize(self.new_width as usize, self.new_height as usize);
+                pixels.resize_buffer(self.new_width, self.new_height);
+            }
 
             if ui.button("Add empire").clicked() {
                 world.empires.push(Empire {

@@ -781,10 +781,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c05aeb6a22b8f62540c194aac980f2115af067bfe15a0734d7277a768d396b31"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1800,19 +1798,12 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "env_logger",
- "getrandom",
  "grid",
  "itertools",
- "js-sys",
  "log",
  "pixels",
- "pollster",
  "rand",
  "rayon",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
  "winit",
  "winit_input_helper",
 ]

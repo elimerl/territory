@@ -10,7 +10,6 @@ pub struct World {
     pub tick: usize,
 }
 impl World {
-    /// Create a new `World` instance that can draw a moving box.
     pub fn new(width: usize, height: usize) -> Self {
         Self {
             cells: vec![Cell::default(); width * height],
@@ -19,6 +18,13 @@ impl World {
             height,
             tick: 0,
         }
+    }
+
+    /// clears all cells
+    pub fn resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.cells = vec![Cell::default(); width * height];
     }
 
     pub fn update(&mut self) {
