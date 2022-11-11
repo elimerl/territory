@@ -1,27 +1,43 @@
 mod gui;
-mod world;
 
+use std::rc::Rc;
 use std::time::Instant;
 
 use gui::Framework;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 
+use territory::world::{Cell, World};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use world::{Cell, World};
-
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 256;
 
-fn main() -> Result<(), Error> {
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
+fn main() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        wasm_bindgen_futures::spawn_local(run());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
+
+        pollster::block_on(run());
+    }
+}
+
+async fn run() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
-    let window = {
+    let window = Rc::new({
         let size = LogicalSize::new((WIDTH * 2) as f64, (HEIGHT * 2) as f64);
         WindowBuilder::new()
             .with_title("territory")
@@ -29,12 +45,58 @@ fn main() -> Result<(), Error> {
             .with_min_inner_size(size)
             .build(&event_loop)
             .unwrap()
-    };
+    });
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        use winit::platform::web::WindowExtWebSys;
+
+        // Retrieve current width and height dimensions of browser client window
+        let get_window_size = || {
+            let client_window = web_sys::window().unwrap();
+            LogicalSize::new(
+                client_window.inner_width().unwrap().as_f64().unwrap(),
+                client_window.inner_height().unwrap().as_f64().unwrap(),
+            )
+        };
+
+        let window = Rc::clone(&window);
+
+        // Initialize winit window with current dimensions of browser client
+        window.set_inner_size(get_window_size());
+
+        let client_window = web_sys::window().unwrap();
+
+        // Attach winit canvas to body element
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.body())
+            .and_then(|body| {
+                body.append_child(&web_sys::Element::from(window.canvas()))
+                    .ok()
+            })
+            .expect("couldn't append canvas to document body");
+
+        // Listen for resize event on browser client. Adjust winit window dimensions
+        // on event trigger
+        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_e: web_sys::Event| {
+            let size = get_window_size();
+            window.set_inner_size(size)
+        }) as Box<dyn FnMut(_)>);
+        client_window
+            .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
+    }
 
     let (mut pixels, mut framework) = {
         let window_size = window.inner_size();
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture)?;
+        let surface_texture =
+            SurfaceTexture::new(window_size.width, window_size.height, window.as_ref());
+        let pixels = Pixels::new_async(WIDTH, HEIGHT, surface_texture)
+            .await
+            .expect("Pixels error");
 
         let framework = Framework::new(
             &event_loop,
@@ -91,28 +153,6 @@ fn main() -> Result<(), Error> {
 
         // Handle input events
         if input.update(&event) {
-            // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-            if input.mouse_held(0) {
-                if let Some(mouse) = input.mouse() {
-                    let coords = pixels.window_pos_to_pixel(mouse);
-                    if let Ok(coords) = coords {
-                        let paint_with = framework.gui.painting_with;
-
-                        world.set(
-                            coords.0 as isize,
-                            coords.1 as isize,
-                            Cell {
-                                owner: paint_with,
-                                troops: framework.gui.painting_troops,
-                            },
-                        );
-                    }
-                }
-            }
             // Update the scale factor
             if let Some(scale_factor) = input.scale_factor() {
                 framework.scale_factor(scale_factor);

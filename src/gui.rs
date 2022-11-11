@@ -6,7 +6,7 @@ use rand::Rng;
 use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
 
-use crate::world::{Cell, Empire, World};
+use territory::world::{Cell, Empire, World};
 
 /// Manages all state required for rendering egui over `Pixels`.
 pub(crate) struct Framework {
@@ -126,27 +126,21 @@ impl Framework {
 
 /// Example application state. A real application will need a lot more state than this.
 pub struct Gui {
-    /// Only show the egui window when true.
-    window_open: bool,
-    world_settings_open: bool,
-    pub painting_with: u16,
-    pub painting_troops: u16,
     pub playing: bool,
 }
 impl Gui {
     /// Create a `Gui`.
     fn new() -> Self {
-        Self {
-            window_open: true,
-            world_settings_open: true,
-            painting_with: 0,
-            painting_troops: 1,
-            playing: true,
-        }
+        Self { playing: true }
     }
 
     /// Create the UI using egui.
     fn ui(&mut self, ctx: &Context, world: &mut World) {
+        egui::Window::new("About").show(ctx, |ui| {
+            ui.heading("Usage");
+			ui.label("To get started, press 'Add empire' in the world settings window a few times, then hit 'Randomize' and watch!");
+        });
+
         egui::Window::new("World Settings").show(ctx, |ui| {
             ui.label("Settings to play with about the simulation.");
 
@@ -226,7 +220,7 @@ impl Gui {
                             .empires
                             .iter()
                             .filter(|v| {
-                                v.id == empire.id && empires_sorted[v.id as usize - 1].1 == 0
+                                v.id != empire.id && empires_sorted[v.id as usize - 1].1 == 0
                             })
                             .count()
                             == world.empires.len() - 1

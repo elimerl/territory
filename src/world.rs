@@ -1,8 +1,5 @@
-use itertools::Itertools;
-use rand::{
-    seq::{IteratorRandom, SliceRandom},
-    Rng,
-};
+use rand::{seq::SliceRandom, Rng};
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 pub struct World {
@@ -25,52 +22,59 @@ impl World {
     }
 
     pub fn update(&mut self) {
-        let mut buf = self.cells.clone();
-
-        for x in 0isize..self.width as isize {
-            for y in 0isize..self.height as isize {
-                let mut cell = *self.get(x, y).unwrap();
-
-                let mut neighbors = [
-                    self.get(x - 1, y),
-                    self.get(x + 1, y),
-                    self.get(x, y - 1),
-                    self.get(x, y + 1),
-                    self.get(x - 1, y - 1),
-                    self.get(x + 1, y - 1),
-                    self.get(x - 1, y + 1),
-                    self.get(x + 1, y + 1),
-                ];
-                neighbors.shuffle(&mut rand::thread_rng());
-
-                cell.troops = (cell.troops as f32 * 0.95) as u16;
-
-                for neighbor in neighbors.iter().flatten() {
-                    if neighbor.owner == cell.owner && neighbor.troops > cell.troops {
-                        cell.owner = neighbor.owner;
-                        cell.troops = (neighbor.troops as f32
-                            * rand::thread_rng().gen_range(0.98..1.01))
-                            as u16;
-                        break;
-                    }
-                    if neighbor.troops > cell.troops {
-                        cell.owner = neighbor.owner;
-                        cell.troops = (neighbor.troops as f32
-                            * rand::thread_rng().gen_range(0.98..1.01))
-                            as u16;
-                        break;
-                    }
-                }
-
-                if cell.owner == 0 {
-                    cell.troops = 0;
-                }
-
-                buf[(y as usize) * self.width + (x as usize)] = cell;
+        self.cells = {
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.cells.iter()
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                self.cells.par_iter()
             }
         }
+        .copied()
+        .enumerate()
+        .map(|(i, cell)| {
+            let mut cell = cell;
+            let x = (i % self.width) as isize;
+            let y = (i / self.width) as isize;
 
-        self.cells = buf;
+            let mut neighbors = [
+                self.get(x - 1, y),
+                self.get(x + 1, y),
+                self.get(x, y - 1),
+                self.get(x, y + 1),
+                self.get(x - 1, y - 1),
+                self.get(x + 1, y - 1),
+                self.get(x - 1, y + 1),
+                self.get(x + 1, y + 1),
+            ];
+            neighbors.shuffle(&mut rand::thread_rng());
+
+            cell.troops = (cell.troops as f32 * 0.95) as u16;
+
+            for neighbor in neighbors.iter().flatten() {
+                if neighbor.owner == cell.owner && neighbor.troops > cell.troops {
+                    cell.owner = neighbor.owner;
+                    cell.troops =
+                        (neighbor.troops as f32 * rand::thread_rng().gen_range(0.98..1.01)) as u16;
+                    break;
+                }
+                if neighbor.troops > cell.troops {
+                    cell.owner = neighbor.owner;
+                    cell.troops =
+                        (neighbor.troops as f32 * rand::thread_rng().gen_range(0.98..1.01)) as u16;
+                    break;
+                }
+            }
+
+            if cell.owner == 0 {
+                cell.troops = 0;
+            }
+
+            cell
+        })
+        .collect();
 
         // self.cells = self
         //     .cells
